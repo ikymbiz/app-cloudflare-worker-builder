@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Worker-Builder-Deployer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body { background-color: #0f172a; color: #f8fafc; font-family: 'Inter', sans-serif; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #1e293b; }
+    ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+    textarea { tab-size: 2; }
+    .toast { animation: fadein 0.3s, fadeout 0.3s 2.7s forwards; }
+    @keyframes fadein { from { bottom: 0; opacity: 0; } to { bottom: 30px; opacity: 1; } }
+    @keyframes fadeout { from { bottom: 30px; opacity: 1; } to { bottom: 0; opacity: 0; } }
+  </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden">
+
+  <!-- Header -->
+  <header class="bg-slate-900 border-b border-slate-800 p-4 flex justify-between items-center shrink-0">
+    <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-teal-400 truncate">
+      <i class="fa-solid fa-cloud-bolt mr-2 text-blue-400"></i>Worker-Builder-Deployer
+    </h1>
+    <button onclick="deployWorker()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-semibold text-sm transition shadow-lg shadow-blue-500/30 shrink-0 ml-2">
+      <i class="fa-solid fa-rocket mr-1"></i> Deploy
+    </button>
+  </header>
+
+  <!-- Navigation -->
+  <nav class="flex bg-slate-900 border-b border-slate-800 shrink-0">
+    <button id="btn-tab-editor" onclick="switchTab('tab-editor')" class="tab-btn flex-1 py-3 text-sm font-medium border-b-2 border-blue-500 text-blue-400 transition">
+      <i class="fa-solid fa-code mr-1"></i> Editor & AI
+    </button>
+    <button id="btn-tab-settings" onclick="switchTab('tab-settings')" class="tab-btn flex-1 py-3 text-sm font-medium text-slate-400 transition">
+      <i class="fa-solid fa-gear mr-1"></i> Settings
+    </button>
+    <button id="btn-tab-history" onclick="switchTab('tab-history')" class="tab-btn flex-1 py-3 text-sm font-medium text-slate-400 transition">
+      <i class="fa-solid fa-clock-rotate-left mr-1"></i> History
+    </button>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="flex-1 overflow-y-auto p-4 relative">
+    
+    <!-- Tab: Editor & AI -->
+    <div id="tab-editor" class="tab-content flex flex-col h-full space-y-4">
+      <div class="flex-1 flex flex-col">
+        <label class="text-xs text-slate-400 mb-1 uppercase font-bold tracking-wider">Worker Code</label>
+        <textarea id="editor" class="flex-1 w-full bg-slate-950 text-emerald-400 font-mono text-sm p-4 rounded-xl border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-none shadow-inner leading-relaxed" spellcheck="false"></textarea>
+      </div>
+      
+      <div class="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+        <label class="text-xs text-slate-400 mb-2 block uppercase font-bold tracking-wider"><i class="fa-solid fa-wand-magic-sparkles mr-1 text-purple-400"></i>Ask GenAI</label>
+        <div class="flex gap-2">
+          <textarea id="ai-prompt" rows="2" class="flex-1 bg-slate-900 text-white text-sm p-3 rounded-lg border border-slate-700 focus:border-purple-500 outline-none resize-none" placeholder="例: JSONを返すシンプルなAPIを作って"></textarea>
+          <button onclick="askAI()" class="bg-purple-600 hover:bg-purple-500 text-white px-4 rounded-lg font-semibold transition flex flex-col justify-center items-center shadow-lg shadow-purple-500/30 w-20 shrink-0">
+            <i class="fa-solid fa-paper-plane mb-1"></i>
+            <span class="text-xs">Send</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Settings -->
+    <div id="tab-settings" class="tab-content hidden space-y-6 pb-10">
+      
+      <!-- Cloudflare Config -->
+      <section class="bg-slate-800/40 p-5 rounded-xl border border-slate-700/50">
+        <h2 class="text-lg font-semibold mb-4 text-blue-300 border-b border-slate-700 pb-2"><i class="fa-brands fa-cloudflare mr-2"></i>Cloudflare Deploy Settings</h2>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Account ID</label>
+            <input type="text" id="set-account-id" class="w-full bg-slate-900 text-white p-3 rounded-lg border border-slate-700 focus:border-blue-500 outline-none text-sm" placeholder="e.g. 1a2b3c4d5e...">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Worker Script Name</label>
+            <input type="text" id="set-script-name" class="w-full bg-slate-900 text-white p-3 rounded-lg border border-slate-700 focus:border-blue-500 outline-none text-sm" placeholder="my-awesome-worker">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">API Token (Account.Workers Scripts: Edit)</label>
+            <input type="password" id="set-api-token" class="w-full bg-slate-900 text-white p-3 rounded-lg border border-slate-700 focus:border-blue-500 outline-none text-sm" placeholder="••••••••••••••••">
+            <p class="text-[10px] text-red-400 mt-1 font-semibold"><i class="fa-solid fa-triangle-exclamation mr-1"></i>APIトークンは利便性のためLocalStorageに保存されます。XSS攻撃等による漏洩リスクがあるため自己責任でご利用ください。</p>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Compatibility Date</label>
+              <input type="date" id="set-compat-date" class="w-full bg-slate-900 text-white p-3 rounded-lg border border-slate-700 focus:border-blue-500 outline-none text-sm">
+              <p class="text-[10px] text-slate-500 mt-1">最新のランタイム挙動を適用するため、通常は今日の日付を設定します。</p>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Module Format</label>
+              <select id="set-is-esm" class="w-full bg-slate-900 text-white p-3 rounded-lg border border-slate-700 focus:border-blue-500 outline-none text-sm appearance-none">
+                <option value="true">ES Modules (export default)</option>
+                <option value="false">Service Worker (addEventListener)</option>
+              </select>
+              <p class="text-[10px] text-slate-500 mt-1">モダンな開発では ES Modules が推奨されます。</p>
+            </div>
+          </div>
+
+          <!-- Environment Variables / Secrets -->
+          <div class="pt-4 border-t border-slate-700 mt-4">
+            <div class="flex justify-between items-center mb-2">
+              <label class="block text-xs text-slate-400">Environment Variables / Secrets</label>
+              <button onclick="addEnvVar()" class="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-white transition"><i class="fa-solid fa-plus mr-1"></i>Add Variable</button>
+            </div>
+            <p class="text-[10px] text-slate-500 mb-3">Worker内で `env.KEY_NAME` としてアクセスできる変数を設定します。（※ ES Modules形式でのみ有効）</p>
+            <div id="env-vars-container" class="space-y-2">
+              <!-- Dynamic Env Vars here -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- AI Config -->
+      <section class="bg-slate-800/40 p-5 rounded-xl border border-slate-700/50">
+        <h2 class="text-lg font-semibold mb-4 text-purple-300 border-b border-slate-700 pb-2"><i class="fa-solid fa-robot mr-2"></i>GenAI Settings</h2>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Gemini API Key (gemini-2.5-flash)</label>
+            <input type="password" id="set-gemini-key" class="w-full bg-slate-900 text-white p-3 rounded-lg border border-slate-700 focus:border-purple-500 outline-none text-sm" placeholder="AIzaSy...">
+            <p class="text-[10px] text-slate-500 mt-1">APIキーはブラウザ(LocalStorage)に保存されます。</p>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Tab: History -->
+    <div id="tab-history" class="tab-content hidden space-y-6">
+      <p class="text-xs text-slate-400">データは自動的にブラウザに保存されます。</p>
+      
+      <div>
+        <h3 class="text-md font-bold text-teal-300 border-b border-slate-700 pb-2 mb-3"><i class="fa-solid fa-calendar-days mr-2"></i>Daily Snapshots (Max 10 days)</h3>
+        <ul id="daily-list" class="space-y-2"></ul>
+      </div>
+
+      <div>
+        <h3 class="text-md font-bold text-blue-300 border-b border-slate-700 pb-2 mb-3"><i class="fa-solid fa-clock-rotate-left mr-2"></i>Recent Changes (Max 30 items)</h3>
+        <ul id="history-list" class="space-y-2"></ul>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer / Log Area -->
+  <footer class="bg-slate-950 border-t border-slate-800 p-3 h-32 shrink-0 flex flex-col">
+    <div class="flex justify-between items-center mb-1">
+      <span class="text-xs text-slate-500 font-bold uppercase tracking-wider">System Log</span>
+      <button onclick="clearLog()" class="text-xs text-slate-500 hover:text-white"><i class="fa-solid fa-trash-can"></i></button>
+    </div>
+    <div id="log-area" class="flex-1 overflow-y-auto font-mono text-xs space-y-1 p-2 bg-black/50 rounded border border-slate-800/50">
+      <div class="text-slate-500">System initialized.</div>
+    </div>
+  </footer>
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="fixed bottom-36 left-1/2 transform -translate-x-1/2 z-50 flex flex-col items-center pointer-events-none"></div>
+
+  <script>
+    // State Management
+    const state = {
+      settings: {
+        accountId: '', scriptName: '', apiToken: '',
+        compatDate: new Date().toISOString().split('T')[0],
+        isEsm: 'true', geminiKey: '',
+        envVars: [] // Array of {key: '', value: '', isSecret: false}
+      },
+      code: 'export default {\n  async fetch(request, env, ctx) {\n    return new Response("Hello World!");\n  }\n};'
+    };
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      loadState();
+      initUI();
+      attachEventListeners();
+    });
+
+    function loadState() {
+      const savedSettings = localStorage.getItem('wbd_settings');
+      if (savedSettings) state.settings = { ...state.settings, ...JSON.parse(savedSettings) };
+      const savedCode = localStorage.getItem('wbd_code');
+      if (savedCode) state.code = savedCode;
+      
+      // Migration: Ensure compatDate is set to today if empty, and envVars exists
+      if (!state.settings.compatDate) state.settings.compatDate = new Date().toISOString().split('T')[0];
+      if (!state.settings.envVars) state.settings.envVars = [];
+    }
+
+    function initUI() {
+      document.getElementById('editor').value = state.code;
+      document.getElementById('set-account-id').value = state.settings.accountId || '';
+      document.getElementById('set-script-name').value = state.settings.scriptName || '';
+      document.getElementById('set-api-token').value = state.settings.apiToken || '';
+      document.getElementById('set-compat-date').value = state.settings.compatDate;
+      document.getElementById('set-is-esm').value = state.settings.isEsm || 'true';
+      document.getElementById('set-gemini-key').value = state.settings.geminiKey || '';
+      
+      renderEnvVars();
+      renderHistory();
+    }
+
+    function attachEventListeners() {
+      const inputs = [
+        'editor', 'set-account-id', 'set-script-name', 'set-api-token',
+        'set-compat-date', 'set-is-esm', 'set-gemini-key'
+      ];
+      inputs.forEach(id => {
+        document.getElementById(id).addEventListener('input', () => {
+          updateStateFromUI();
+          triggerAutoSave();
+        });
+      });
+    }
+
+    function updateStateFromUI() {
+      state.code = document.getElementById('editor').value;
+      state.settings.accountId = document.getElementById('set-account-id').value.trim();
+      state.settings.scriptName = document.getElementById('set-script-name').value.trim();
+      state.settings.apiToken = document.getElementById('set-api-token').value.trim();
+      state.settings.compatDate = document.getElementById('set-compat-date').value;
+      state.settings.isEsm = document.getElementById('set-is-esm').value;
+      state.settings.geminiKey = document.getElementById('set-gemini-key').value.trim();
+    }
+
+    // Environment Variables Functions
+    function renderEnvVars() {
+      const container = document.getElementById('env-vars-container');
+      container.innerHTML = '';
+      if (state.settings.envVars.length === 0) {
+        container.innerHTML = '<div class="text-xs text-slate-500 italic">No variables set.</div>';
+        return;
+      }
+      state.settings.envVars.forEach((v, index) => {
+        const row = document.createElement('div');
+        row.className = 'flex gap-2 items-center bg-slate-800/50 p-2 rounded-lg border border-slate-700/50';
+        row.innerHTML = `
+          <input type="text" placeholder="Key (e.g. API_KEY)" value="${v.key}" class="w-1/3 bg-slate-900 text-white p-2 rounded border border-slate-700 focus:border-blue-500 outline-none text-xs" oninput="updateEnvVar(${index}, 'key', this.value)">
+          <input type="${v.isSecret ? 'password' : 'text'}" placeholder="Value" value="${v.value}" class="flex-1 bg-slate-900 text-white p-2 rounded border border-slate-700 focus:border-blue-500 outline-none text-xs" oninput="updateEnvVar(${index}, 'value', this.value)">
+          <button onclick="toggleEnvSecret(${index})" class="text-slate-400 hover:text-white px-2 transition" title="Toggle Secret Visibility"><i class="fa-solid ${v.isSecret ? 'fa-eye-slash' : 'fa-eye'}"></i></button>
+          <button onclick="removeEnvVar(${index})" class="text-red-400 hover:text-red-300 px-2 transition" title="Delete"><i class="fa-solid fa-trash"></i></button>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function addEnvVar() {
+      state.settings.envVars.push({key: '', value: '', isSecret: false});
+      renderEnvVars();
+      triggerAutoSave();
+    }
+
+    function updateEnvVar(index, field, value) {
+      state.settings.envVars[index][field] = value;
+      triggerAutoSave();
+    }
+
+    function toggleEnvSecret(index) {
+      state.settings.envVars[index].isSecret = !state.settings.envVars[index].isSecret;
+      renderEnvVars();
+      triggerAutoSave();
+    }
+
+    function removeEnvVar(index) {
+      state.settings.envVars.splice(index, 1);
+      renderEnvVars();
+      triggerAutoSave();
+    }
+
+    // Auto Save Logic
+    let autoSaveTimeout;
+    function triggerAutoSave() {
+      clearTimeout(autoSaveTimeout);
+      autoSaveTimeout = setTimeout(() => {
+        saveData();
+        showToast('Auto-saved');
+      }, 2000);
+    }
+
+    function saveData(isManual = false) {
+      const now = Date.now();
+      const dateStr = new Date().toLocaleDateString('ja-JP');
+
+      localStorage.setItem('wbd_settings', JSON.stringify(state.settings));
+      localStorage.setItem('wbd_code', state.code);
+
+      // Recent Changes (Max 30)
+      let changes = JSON.parse(localStorage.getItem('wbd_changes') || '[]');
+      if (changes.length === 0 || changes[0].code !== state.code || isManual) {
+        changes.unshift({ timestamp: now, code: state.code });
+        if (changes.length > 30) changes = changes.slice(0, 30);
+        localStorage.setItem('wbd_changes', JSON.stringify(changes));
+      }
+
+      // Daily Snapshots (Max 10)
+      let daily = JSON.parse(localStorage.getItem('wbd_daily') || '{}');
+      daily[dateStr] = { timestamp: now, code: state.code };
+      let dailyKeys = Object.keys(daily).sort((a, b) => new Date(b) - new Date(a));
+      if (dailyKeys.length > 10) {
+        let newDaily = {};
+        for(let i=0; i<10; i++) newDaily[dailyKeys[i]] = daily[dailyKeys[i]];
+        daily = newDaily;
+      }
+      localStorage.setItem('wbd_daily', JSON.stringify(daily));
+
+      renderHistory();
+    }
+
+    // AI Integration (Gemini direct only)
+    async function askAI() {
+      updateStateFromUI();
+      const promptEl = document.getElementById('ai-prompt');
+      const prompt = promptEl.value.trim();
+      if (!prompt) return showToast('プロンプトを入力してください', 'error');
+
+      if (!state.settings.geminiKey) {
+        logMsg('Gemini API Keyが設定されていません。Settingsタブを確認してください。', 'error');
+        switchTab('tab-settings');
+        return;
+      }
+
+      saveData(true); // AI動作直前に保存
+      logMsg('AIにリクエストを送信中...', 'info');
+      
+      const btn = document.querySelector('button[onclick="askAI()"]');
+      const originalBtnHTML = btn.innerHTML;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mb-1"></i><span class="text-xs">Wait</span>';
+      btn.disabled = true;
+
+      const sysPrompt = "You are an expert Cloudflare Workers developer. Return ONLY valid javascript code based on the user's request. DO NOT wrap code in markdown blocks like ```javascript. Just return the raw code.";
+      const combinedPrompt = `${sysPrompt}\n\n[Current Code]\n${state.code}\n\n[User Request]\n${prompt}`;
+
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${state.settings.geminiKey}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: combinedPrompt }] }] })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.message);
+        
+        let resultText = data.candidates[0].content.parts[0].text;
+
+        // Cleanup markdown if AI ignored instructions
+        resultText = resultText.replace(/```javascript/gi, '').replace(/```js/gi, '').replace(/```/g, '').trim();
+        
+        state.code = resultText;
+        document.getElementById('editor').value = state.code;
+        saveData(true);
+        promptEl.value = '';
+        logMsg('AIがコードを生成し、反映・保存しました。', 'success');
+        showToast('AI生成完了');
+
+      } catch (err) {
+        logMsg(`AIエラー: ${err.message}`, 'error');
+        showToast('AIエラー', 'error');
+      } finally {
+        btn.innerHTML = originalBtnHTML;
+        btn.disabled = false;
+      }
+    }
+
+    // Deploy Logic
+    async function deployWorker() {
+      updateStateFromUI();
+      const { accountId, scriptName, apiToken, isEsm, compatDate, envVars } = state.settings;
+      
+      if (!accountId || !scriptName || !apiToken) {
+        logMsg('Account ID, Script Name, API Tokenが設定されていません。Settingsタブを確認してください。', 'error');
+        switchTab('tab-settings');
+        return;
+      }
+
+      logMsg(`デプロイ開始: ${scriptName} ...`, 'info');
+      
+      const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${scriptName}`;
+      const headers = { 'Authorization': `Bearer ${apiToken}` };
+      let body;
+
+      try {
+        if (isEsm === 'true') {
+          const formData = new FormData();
+          
+          // Construct bindings from environment variables
+          const bindings = (envVars || [])
+            .filter(v => v.key.trim() !== '')
+            .map(v => ({
+              name: v.key.trim(),
+              type: v.isSecret ? 'secret_text' : 'plain_text',
+              text: v.value
+            }));
+
+          const metadata = {
+            main_module: 'worker.js',
+            compatibility_date: compatDate || new Date().toISOString().split('T')[0]
+          };
+          
+          if (bindings.length > 0) {
+            metadata.bindings = bindings;
+          }
+
+          formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+          formData.append('worker.js', new Blob([state.code], { type: 'application/javascript+module' }));
+          body = formData;
+        } else {
+          // Service Worker syntax (Legacy)
+          headers['Content-Type'] = 'application/javascript';
+          body = state.code;
+          if (envVars && envVars.some(v => v.key.trim() !== '')) {
+             logMsg('警告: 環境変数は ES Modules 形式(export default)でのみ付与されます。Service Worker形式では無視されます。', 'error');
+          }
+        }
+
+        const res = await fetch(url, { method: 'PUT', headers, body });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          logMsg(`デプロイ成功！ ID: ${data.result.id}`, 'success');
+          logMsg(`ブラウザのCORS制限によりコンソールに警告が出る場合がありますが、CFダッシュボードをご確認ください。`, 'info');
+          showToast('Deploy Success!');
+        } else {
+          logMsg(`デプロイ失敗: ${JSON.stringify(data.errors)}`, 'error');
+        }
+      } catch (err) {
+        logMsg(`通信エラー: ${err.message}`, 'error');
+        logMsg(`※ ブラウザからCloudflare APIへの直接アクセスはCORSエラーになる場合があります。開発者ツールのNetworkタブを確認してください。`, 'info');
+      }
+    }
+
+    // UI Helpers
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById(tabId).classList.remove('hidden');
+      
+      document.querySelectorAll('.tab-btn').forEach(el => {
+        el.classList.remove('border-b-2', 'border-blue-500', 'text-blue-400');
+        el.classList.add('text-slate-400');
+      });
+      document.getElementById('btn-' + tabId).classList.add('border-b-2', 'border-blue-500', 'text-blue-400');
+      document.getElementById('btn-' + tabId).classList.remove('text-slate-400');
+    }
+
+    function logMsg(msg, type = 'info') {
+      const logArea = document.getElementById('log-area');
+      const div = document.createElement('div');
+      const time = new Date().toLocaleTimeString('ja-JP');
+      let colorClass = 'text-slate-300';
+      if (type === 'error') colorClass = 'text-red-400';
+      if (type === 'success') colorClass = 'text-emerald-400';
+      if (type === 'info') colorClass = 'text-blue-300';
+      
+      div.innerHTML = `<span class="text-slate-500">[${time}]</span> <span class="${colorClass}">${msg}</span>`;
+      logArea.appendChild(div);
+      logArea.scrollTop = logArea.scrollHeight;
+    }
+
+    function clearLog() {
+      document.getElementById('log-area').innerHTML = '';
+    }
+
+    function showToast(msg, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const bg = type === 'error' ? 'bg-red-600' : 'bg-emerald-600';
+      toast.className = `toast ${bg} text-white px-4 py-2 rounded-full text-sm shadow-lg font-bold mb-2 opacity-0 relative`;
+      toast.innerText = msg;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // History Rendering & Restoring
+    function renderHistory() {
+      const dailyList = document.getElementById('daily-list');
+      const historyList = document.getElementById('history-list');
+      dailyList.innerHTML = '';
+      historyList.innerHTML = '';
+
+      const daily = JSON.parse(localStorage.getItem('wbd_daily') || '{}');
+      const changes = JSON.parse(localStorage.getItem('wbd_changes') || '[]');
+
+      Object.keys(daily).sort((a,b) => new Date(b) - new Date(a)).forEach(date => {
+        const item = daily[date];
+        const li = document.createElement('li');
+        li.className = 'bg-slate-800/60 p-3 rounded-lg flex justify-between items-center border border-slate-700/50';
+        li.innerHTML = `
+          <span class="text-sm text-teal-200 font-mono">${date} <span class="text-xs text-slate-400">(${new Date(item.timestamp).toLocaleTimeString()})</span></span>
+          <button class="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-xs transition" onclick='restoreCode(${JSON.stringify(item.code)})'><i class="fa-solid fa-rotate-left mr-1"></i>Restore</button>
+        `;
+        dailyList.appendChild(li);
+      });
+
+      changes.forEach(item => {
+        const li = document.createElement('li');
+        li.className = 'bg-slate-800/40 p-3 rounded-lg flex justify-between items-center border border-slate-700/50';
+        li.innerHTML = `
+          <span class="text-sm text-blue-200 font-mono">${new Date(item.timestamp).toLocaleString('ja-JP')}</span>
+          <button class="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-xs transition" onclick='restoreCode(${JSON.stringify(item.code)})'><i class="fa-solid fa-rotate-left mr-1"></i>Restore</button>
+        `;
+        historyList.appendChild(li);
+      });
+    }
+
+    function restoreCode(codeStr) {
+      if(confirm('エディタのコードをこの時点の状態に復元しますか？')) {
+        state.code = codeStr;
+        document.getElementById('editor').value = state.code;
+        saveData(true);
+        switchTab('tab-editor');
+        logMsg('コードを履歴から復元しました。', 'success');
+        showToast('Restored');
+      }
+    }
+  </script>
+</body>
+</html>
